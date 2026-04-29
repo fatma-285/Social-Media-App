@@ -1,13 +1,13 @@
 import type { HydratedDocument } from "mongoose";
 import type { IUser } from "../DB/models/user.model.ts";
+import type { JwtPayload } from "jsonwebtoken";
 
-declare global {
-  namespace Express {
+declare module "express-serve-static-core" {
     interface Request {
       user?: HydratedDocument<IUser>;
-      decoded?: any;
+      decoded?: JwtPayload;
     }
-  }
+  
 }
 
 export {};

@@ -12,7 +12,7 @@ export const sendEmail=async(mailOptions:Mail.Options)=>{
     });
 
     const info = await transporter.sendMail({
-        from: `Fatma's SarahaApp <${EMAIL}`,
+        from: `Fatma's SocialMedia App <${EMAIL}`,
         ...mailOptions
       });
     console.log("Message sent:", info.messageId);

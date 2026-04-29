@@ -5,7 +5,8 @@ import { GenderEnum } from "../../common/enum/user.enum.js"
 
 export const signUpSchema = {
     body: zod.object({
-        userName: zod.string({error:"name is required"}).min(3).max(25),
+        firstName: zod.string({error:"name is required"}).min(3).max(25),
+        lastName: zod.string({error:"name is required"}).min(3).max(25),
         email: zod.email(),
         password: zod.string().min(8).max(20),
         cPassword: zod.string().min(8).max(20),
@@ -37,27 +38,31 @@ export const signUpSchema = {
     // })
     ,
 }
-export type ISignUpType=zod.infer<typeof signUpSchema.body>
+
+
+//* //// resend otp ////
+export const IResendOtpSchema={
+    body: zod.object({
+        email: zod.email(),
+    })
+}
 
 //* //// login ////
 
 export const ILoginSchema={
-     body: zod.object({
-        email: zod.email(),
+     body: IResendOtpSchema.body.safeExtend({
         password: zod.string().min(8).max(20),
     })
 }
-export type ILoginType=zod.infer<typeof ILoginSchema.body>
 
 //* //// confirm email ////
 
 export const IConfirmEmailSchema={
     body: zod.object({
         email: zod.email(),
-        otp:zod.string(),
+        otp:zod.string().regex(/^\d{5}$/),
     })
 }
-export type IConfirmEmailType=zod.infer<typeof IConfirmEmailSchema.body>
 
 //* //// forget password ////
 
@@ -66,7 +71,6 @@ export const IForgetPasswordSchema={
         email: zod.email(),
     })
 }
-export type IForgetPasswordType=zod.infer<typeof IForgetPasswordSchema.body>
 
 
 //* //// reset password ////
@@ -78,7 +82,6 @@ export const IResetPasswordSchema={
         password: zod.string().min(8).max(20),
     })
 }
-export type IResetPasswordType=zod.infer<typeof IResetPasswordSchema.body>
 
 //* //// change password ////
 
@@ -89,4 +92,3 @@ export const IChangePasswordSchema={
         confirmPassword: zod.string().min(8).max(20),
     })
 }
-export type IChangePasswordType=zod.infer<typeof IChangePasswordSchema.body>
