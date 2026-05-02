@@ -18,40 +18,42 @@ import { OAuth2Client, type TokenPayload } from "google-auth-library";
 import { eventEmitter } from "../../common/utils/email/email.events.js";
 import { emailEnum } from "../../common/enum/email.enum.js";
 import redisService from "../../common/service/redis.service.js";
+import { S3Service } from "../../common/service/s3.service.js";
 class AuthService {
 
-    private readonly _userRepo= new UserRepository()
+    private readonly _userRepo = new UserRepository()
     private readonly _redisService = redisService
     private readonly _tokenService = tokenService
+    private readonly _s3Service = new S3Service
     constructor() { }
 
-    sendEmailOtp = async ({email, fullName}:{email:string,fullName:string}) => {
-        const isBlocked = await this._redisService.ttl(this._redisService.block_otp_key( email)) as number
-        if (isBlocked&& isBlocked > 0) {
-            await  this._redisService.del( this._redisService.max_otp_key( email ))
-            throw new appError(`otp blocked for ${isBlocked} seconds`,  400)
+    sendEmailOtp = async ({ email, fullName }: { email: string, fullName: string }) => {
+        const isBlocked = await this._redisService.ttl(this._redisService.block_otp_key(email)) as number
+        if (isBlocked && isBlocked > 0) {
+            await this._redisService.del(this._redisService.max_otp_key(email))
+            throw new appError(`otp blocked for ${isBlocked} seconds`, 400)
         }
-        await  this._redisService.del( this._redisService.block_otp_key( email ))
-        const ttlSent = await this._redisService.ttl(this._redisService.otp_key( {email} )) as number
+        await this._redisService.del(this._redisService.block_otp_key(email))
+        const ttlSent = await this._redisService.ttl(this._redisService.otp_key({ email })) as number
         if (ttlSent && ttlSent > 0) {
-            throw new appError(`otp sent recently, wait for ${ttlSent} seconds`, 400 )
+            throw new appError(`otp sent recently, wait for ${ttlSent} seconds`, 400)
         }
 
-        const maxOtp = await  this._redisService.get( this._redisService.max_otp_key( email ))
+        const maxOtp = await this._redisService.get(this._redisService.max_otp_key(email))
         if (maxOtp >= 3) {
-            await  this._redisService.set({ key:  this._redisService.block_otp_key( email ), value: "1", ttl: 60 })
+            await this._redisService.set({ key: this._redisService.block_otp_key(email), value: "1", ttl: 60 })
             throw new Error("otp limit exceeded..", { cause: 400 })
         }
 
-        const otp = await generateOtp() 
+        const otp = await generateOtp()
         // eventEmitter.emit(emailEnum.confirmEmail,async()=>{
         await sendEmail({
             to: email,
             subject: "welcome to SocialMedia app",
             html: emailTemplete(otp.toString(), fullName),
         })
-        await  this._redisService.set({ key:  this._redisService.otp_key({ email }), value: Hash({ plainText: `${otp}` }), ttl: 60 * 2 })
-        await  this._redisService.incr( this._redisService.max_otp_key(email))
+        await this._redisService.set({ key: this._redisService.otp_key({ email }), value: Hash({ plainText: `${otp}` }), ttl: 60 * 2 })
+        await this._redisService.incr(this._redisService.max_otp_key(email))
 
         // })
     }
@@ -102,30 +104,30 @@ class AuthService {
     }
 
     resendOtp = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { email }: IResendOtpType = req.body;
-        if (!email) {
-            throw new Error("email is required..", { cause: 400 })
-        }
+        try {
+            const { email }: IResendOtpType = req.body;
+            if (!email) {
+                throw new Error("email is required..", { cause: 400 })
+            }
 
-        const user = await this._userRepo.findOne({ filter: { email, provider: ProviderEnum.system } })
-        if (!user) {
-            throw new Error("user not found..", { cause: 400 })
-        }
-        if (user.confirmed) {
-            throw new Error("user already confirmed..", { cause: 400 })
-        }
+            const user = await this._userRepo.findOne({ filter: { email, provider: ProviderEnum.system } })
+            if (!user) {
+                throw new Error("user not found..", { cause: 400 })
+            }
+            if (user.confirmed) {
+                throw new Error("user already confirmed..", { cause: 400 })
+            }
 
-        await this.sendEmailOtp({ email, fullName: `${user.firstName} ${user.lastName}` });
+            await this.sendEmailOtp({ email, fullName: `${user.firstName} ${user.lastName}` });
 
-        successResponse({ res, status: 200, message: "otp sent successfully..👌" })
-    } catch (error: any) {
-        throw new Error(error.message)
+            successResponse({ res, status: 200, message: "otp sent successfully..👌" })
+        } catch (error: any) {
+            throw new Error(error.message)
+        }
     }
-}
 
-// ng s -o run
- 
+    // ng s -o run
+
     signUpWithGmail = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { idToken } = req.body;
@@ -296,6 +298,44 @@ class AuthService {
     getProfile = async (req: Request, res: Response, next: NextFunction) => {
         successResponse({ res, status: 200, message: "user fetched successfully..👌", data: req.user })
 
+    }
+
+    uploadImage = async (req: Request, res: Response, next: NextFunction) => {
+        const key = await this._s3Service.uploadFile({
+            file: req.file!,
+            path: "users"
+        })
+        successResponse({ res, status: 200, data: key })
+    }
+
+    uploadLarge = async (req: Request, res: Response, next: NextFunction) => {
+        const key = await this._s3Service.uploadLargeFile({
+            file: req.file!,
+            path: "users/large"
+        })
+        successResponse({ res, status: 200, data: key })
+    }
+
+    uploadFiles = async (req: Request, res: Response, next: NextFunction) => {
+        const urls = await this._s3Service.uploadFiles({
+            files: req.files as Express.Multer.File[],
+            path: "users/many"
+        })
+        successResponse({ res, status: 200, data: urls })
+    }
+
+    getUploadUrl = async (req: Request, res: Response, next: NextFunction) => {
+        const { ContentType, fileName } = req.body
+        const { url, Key } = await this._s3Service.createPresignedUrl({
+            fileName,
+            ContentType,
+            path: `users/${req?.user?.id}`
+        })
+        await this._userRepo.findOneAndUpdate({
+            filter: { _id: req?.user?.id },
+            update: { profilePic: Key }
+        })
+        successResponse({ res, status: 200, data: { Key, url } })
     }
 
     logout = async (req: Request, res: Response, next: NextFunction) => {

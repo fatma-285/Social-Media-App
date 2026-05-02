@@ -15,6 +15,7 @@ export interface IUser {
     password: string,
     role: RoleEnum,
     age: number,
+    profilePic?: string,
     confirmed?: boolean,
     phone?: string,
     address?: string,
@@ -87,6 +88,7 @@ const userSchema = new mongoose.Schema<IUser>({
         enum: GenderEnum,
         default: GenderEnum.male
     },
+    profilePic: String,
     role: {
         type: String,
         enum: RoleEnum,
@@ -159,6 +161,35 @@ userSchema.pre(["updateOne","deleteOne"],{document:true,query:false},function(){
     console.log("-------------------pre updateOne hook--------------");
     log(this)
 })
+
+//insert many in Model 
+
+userSchema.pre("insertMany",function(doc){
+    console.log("-------------------pre insertMAny hook--------------");
+    log(this) //model => Model (User)
+    console.log(doc);
+})
+
+userSchema.post("insertMany",function(doc){
+    console.log("-------------------post insertMAny hook--------------");
+    log(this)
+    console.log(doc);
+})
+
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+userSchema.pre("findOne",function(){
+    console.log("-------------------pre findOne hook--------------");
+    log(this.getQuery()) 
+    // log(this.getFilter()) 
+    const {paranoid,...rest}=this.getQuery()
+    if(paranoid==false){
+        this.setQuery({...rest})
+    }else{
+        this.setQuery({...rest,deletedAt:{$exists:false}})
+    }
+})
+
+
 
 const userModel = mongoose.models.User || mongoose.model<IUser>("User", userSchema)
 export default userModel
