@@ -1,5 +1,5 @@
 import { RoleEnum, GenderEnum, ProviderEnum } from "../../common/enum/user.enum.js";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { appError } from "../../common/utils/global-error-handler.js";
 import { Hash } from "../../common/utils/security/hash.security.js";
 import type { HydratedDocument } from "mongoose";
@@ -23,7 +23,8 @@ export interface IUser {
     createdAt: Date,
     updatedAt: Date,
     changeCredentials?: Date,
-    provider?: ProviderEnum
+    provider?: ProviderEnum,
+    friends?: Types.ObjectId[]
 }
 
 const userSchema = new mongoose.Schema<IUser>({
@@ -100,7 +101,8 @@ const userSchema = new mongoose.Schema<IUser>({
         default: ProviderEnum.system
     },
     confirmed: Boolean,
-    changeCredentials: Date
+    changeCredentials: Date,
+    friends: [{ type: Types.ObjectId, ref: "User" }]
 }, {
     timestamps: true,
     strictQuery: true,

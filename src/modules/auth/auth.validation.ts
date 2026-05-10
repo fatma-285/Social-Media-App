@@ -52,6 +52,7 @@ export const IResendOtpSchema={
 export const ILoginSchema={
      body: IResendOtpSchema.body.safeExtend({
         password: zod.string().min(8).max(20),
+        fcm:zod.string().optional()
     })
 }
 

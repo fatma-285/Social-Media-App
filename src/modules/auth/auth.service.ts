@@ -19,12 +19,14 @@ import { eventEmitter } from "../../common/utils/email/email.events.js";
 import { emailEnum } from "../../common/enum/email.enum.js";
 import redisService from "../../common/service/redis.service.js";
 import { S3Service } from "../../common/service/s3.service.js";
+import notificationService from "../../common/service/notification.service.js";
 class AuthService {
 
     private readonly _userRepo = new UserRepository()
     private readonly _redisService = redisService
     private readonly _tokenService = tokenService
     private readonly _s3Service = new S3Service
+    private readonly _notificationService = notificationService
     constructor() { }
 
     sendEmailOtp = async ({ email, fullName }: { email: string, fullName: string }) => {
@@ -177,7 +179,7 @@ class AuthService {
     }
 
     login = async (req: Request, res: Response, next: NextFunction) => {
-        const { email, password }: ILoginType = req.body;
+        const { email, password,fcm }: ILoginType = req.body;
         if (!email || !password) {
             throw new appError("all fields are required..", 400)
         }
@@ -212,7 +214,16 @@ class AuthService {
                 jwtid
             }
         });
-
+       if(fcm){
+        await this._redisService.addFCM({userId:user._id,FCMToken:fcm})
+        const tokens= await  this._redisService.getFCMs(user._id)
+         await this._notificationService.sendNotifications({
+            tokens,
+            data:{
+                title:`Hi ${user.firstName} ${user.lastName??""}`,
+                body:`new lgin at ${new Date().toLocaleString()}`
+            }})
+    }   
         successResponse({ res, status: 200, message: "user logged in successfully..👌", data: { access_token, refresh_token } })
     }
 

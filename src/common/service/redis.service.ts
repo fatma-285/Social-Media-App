@@ -153,6 +153,25 @@ class RedisService{
             console.log("error on incr data from redis", error);
         }
     }
+
+    key(userId:Types.ObjectId){
+        return `user:FCM::${userId}`
+    }
+    async addFCM({userId,FCMToken}:{userId:Types.ObjectId,FCMToken:string}){
+        return await this.client.sAdd(this.key(userId),FCMToken)
+    }
+    async removeFCM({userId,FCMToken}:{userId:Types.ObjectId,FCMToken:string}){
+        return await this.client.sRem(this.key(userId),FCMToken)
+    }
+    async getFCMs(userId:Types.ObjectId){
+        return await this.client.sMembers(this.key(userId))
+    }
+    async hasFCM({userId,FCMToken}:{userId:Types.ObjectId,FCMToken:string}){
+        return await this.client.sIsMember(this.key(userId),FCMToken)
+    }
+    async removeFCMUser(userId:Types.ObjectId){
+        return await this.client.del(this.key(userId))
+    }
 }
 
 export default new RedisService

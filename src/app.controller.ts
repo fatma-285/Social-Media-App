@@ -13,6 +13,8 @@ import { parseArgs } from "node:util";
 import { successResponse } from "./common/utils/response.success.js";
 import { S3Service } from "./common/service/s3.service.js";
 import { pipeline } from "node:stream/promises";
+import notificationService from "./common/service/notification.service.js";
+import postRouter from "./modules/posts/post.controller.js";
 
 
 const app: express.Application = express();
@@ -68,6 +70,23 @@ const bootstrap = async () => {
             message: "Welcome to my social media app...😎",
         });
     })
+
+    app.post("/send-notification", async(req: Request, res: Response, next: NextFunction) => {
+       try{
+
+           await notificationService.sendNotification({
+               token:req.body.token,
+               data:{
+                   title:"hello",
+                   body:"world"
+                }
+            })
+            console.log({token:req.body.token});
+        }catch(error){
+            console.log(error);
+        }
+    })
+
  app.get("/upload/pre-signed/*path", async (req: Request, res: Response, next: NextFunction) => {
         const { path } = req.params as { path: string[] };
         const { download } = req.query as { download: string };
@@ -117,6 +136,7 @@ const bootstrap = async () => {
     })
 
     app.use("/auth", authRouter)
+    app.use("/post", postRouter)
 
     app.use("{/*demo}", (req: Request, res: Response, next: NextFunction) => {
         throw new appError(`url ${req.originalUrl} with method ${req.method} not found`, 404)
