@@ -15,7 +15,14 @@ import { S3Service } from "./common/service/s3.service.js";
 import { pipeline } from "node:stream/promises";
 import notificationService from "./common/service/notification.service.js";
 import postRouter from "./modules/posts/post.controller.js";
+import { createHandler } from "graphql-http/lib/use/express";
 
+import {
+  graphql,
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLString,
+} from 'graphql';
 
 const app: express.Application = express();
 const port: number = Number(PORT)
@@ -67,9 +74,38 @@ const bootstrap = async () => {
 
     app.get("/", (req: Request, res: Response, next: NextFunction) => {
         res.status(200).json({
-            message: "Welcome to my social media app...😎",
+            message: "Welcome to my social media app...",
         });
     })
+
+
+    const schema=new GraphQLSchema({
+        query: new GraphQLObjectType({
+            name:"Query",
+            description:"query info",
+            fields:{
+                hello: {
+                    type:GraphQLString,
+                    resolve:()=> {
+                        return "hello"
+                        }
+                },
+                hi: {
+                    type:GraphQLString,
+                    resolve:()=> {
+                        return "hello"
+                        }
+                }
+            }
+        })
+    })
+
+    app.use("/graphql",createHandler({schema}))
+
+
+
+
+
 
     app.post("/send-notification", async(req: Request, res: Response, next: NextFunction) => {
        try{

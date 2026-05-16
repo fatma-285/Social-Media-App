@@ -5,8 +5,12 @@ import { authentication } from "../../common/middleware/authentication.middlewar
 import multer_cloud from "../../common/middleware/multer.cloud.js";
 import { Store_Enum } from "../../common/enum/multer.enum.js";
 import postService from "./post.service.js";
+import commentRouter from "../comment/comment.controller.js";
 
 const postRouter = Router();
+
+postRouter.use("/:postId/comments{/:commentId/replies}",commentRouter);
+
 postRouter.post("/create",
     authentication,
     multer_cloud({store_type:Store_Enum.memory}).array("attachments"),
@@ -20,8 +24,18 @@ postRouter.put("/update/:postId",
     postService.updatePost);
 
 postRouter.get("/",authentication,postService.getPosts);
+
+postRouter.get("/:postId",
+    authentication,
+    Validation(postValidation.PostIdSchema),
+    postService.getPost);
+
 postRouter.post("/like/:postId",
     authentication,
-    Validation(postValidation.likePostSchema),
+    Validation(postValidation.PostIdSchema),
     postService.likePost);
+postRouter.delete("/:postId",
+    authentication,
+    Validation(postValidation.PostIdSchema),
+    postService.deletePost);
 export default postRouter;

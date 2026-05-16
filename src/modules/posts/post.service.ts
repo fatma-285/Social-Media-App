@@ -8,12 +8,14 @@ import redisService from "../../common/service/redis.service.js";
 import { S3Service } from "../../common/service/s3.service.js";
 import PostRepository from "../../DB/repositories/post.repository.js";
 import type { PostDTO, PostIdDTO, updatePostDTO } from "./post.dto.js";
-import  { Types } from "mongoose";
+import { Types } from "mongoose";
 import { randomUUID } from "node:crypto";
 import { Store_Enum } from "../../common/enum/multer.enum.js";
 import notificationService from "../../common/service/notification.service.js";
-import { availibility_enum } from "../../common/enum/post.enum.js";
+import { availibility_enum, On_Model_enum } from "../../common/enum/post.enum.js";
 import { postAvailibility } from "../../common/utils/post.utils.js";
+import { populate } from "dotenv";
+import type { ref } from "node:process";
 class PostService {
 
     private readonly _userRepo = new UserRepository()
@@ -86,9 +88,14 @@ class PostService {
     }
 
     getPosts = async (req: Request, res: Response, next: NextFunction) => {
+        const searchQuery = req?.query?.search ? {
+            content: { $regex: req?.query?.search, $options: "i" }
+        } : {}
         const posts = await this._postRepo.find({
             filter: {
-                ...postAvailibility(req),
+                $or: [
+                    ...postAvailibility(req),
+                ],
             }
         })
 
@@ -96,15 +103,55 @@ class PostService {
             page: +req?.query?.page!,
             limit: +req?.query?.limit!,
             search: {
+                $or: [
+                    ...postAvailibility(req),
+                ],
+                ...searchQuery
+            },
+            populate: [
+                {
+                    path: "comments",
+                    match: {
+                        onModel: On_Model_enum.Post
+                    },
+                    populate: {
+                        path: "replies",
+                        match: {
+                            onModel: On_Model_enum.Comment
+                        }
+                    }
+                }
+            ]
+        })
+
+        // let doc=[]
+        // for (const post of posts) {
+        //    const comments=await this._commentRepo.find({
+        //        filter: {
+        //            postId: post._id,
+        //        }
+        //    })
+        //    doc.push({
+        //       ...post.toObject(),
+        //        comments
+        //    })
+        // }
+
+        successResponse({ res, metaData: paginatedPosts })
+    }
+
+    getPost = async (req: Request, res: Response, next: NextFunction) => {
+        const { postId } = req.params;
+        const post = await this._postRepo.findOne({
+            filter: {
+                _id: postId,
                 ...postAvailibility(req),
-                ...(req.query?.search ? {
-                    $or: [
-                        { content: { $regex: req?.query?.search, $options: "i" } },
-                    ]
-                } : {})
             }
         })
-        successResponse({ res, metaData: paginatedPosts })
+        if (!post) {
+            throw new appError("post not found or not allowed", 404)
+        }
+        successResponse({ res, data: post })
     }
 
     likePost = async (req: Request, res: Response, next: NextFunction) => {
@@ -138,36 +185,37 @@ class PostService {
         successResponse({ res, data: post })
 
     }
-    updatePost=async(req:Request,res:Response,next:NextFunction)=>{
-        const {postId}=req.params
-        const {allowComment,availablity,tags,content,removeAttachment,removeTags}:updatePostDTO=req.body
-         const post=await this._postRepo.findOne({
-            filter:{
-                _id:postId,
-                createdBy:req?.user?._id!
+
+    updatePost = async (req: Request, res: Response, next: NextFunction) => {
+        const { postId } = req.params
+        const { allowComment, availablity, tags, content, removeAttachment, removeTags }: updatePostDTO = req.body
+        const post = await this._postRepo.findOne({
+            filter: {
+                _id: postId,
+                createdBy: req?.user?._id!
             }
-         })
-         if(!post){
-            throw new appError("post not found or not allowed",404)
-         }
-         if(removeAttachment?.length){
-            const invalidFiles=removeAttachment.filter((file)=>{
+        })
+        if (!post) {
+            throw new appError("post not found or not allowed", 404)
+        }
+        if (removeAttachment?.length) {
+            const invalidFiles = removeAttachment.filter((file) => {
                 return !post.attachments?.includes(file)
             })
-            if(invalidFiles?.length){
-                throw new appError("some paths are not found or invalid",400)
+            if (invalidFiles?.length) {
+                throw new appError("some paths are not found or invalid", 400)
             }
             await this._s3Service.deleteFiles(removeAttachment)
-            post.attachments=post.attachments?.filter((file)=>{
+            post.attachments = post.attachments?.filter((file) => {
                 return !removeAttachment?.includes(file)
-            })as string[]
-         }
+            }) as string[]
+        }
 
-         const updateTags=new Set(post?.tags?.map((id)=>id.toString()))
+        const updateTags = new Set(post?.tags?.map((id) => id.toString()))
 
-         removeTags?.forEach((tag)=>{
-           return updateTags.delete(tag)
-         })
+        removeTags?.forEach((tag) => {
+            return updateTags.delete(tag)
+        })
 
         let fcmTokens: string[] = []
 
@@ -187,15 +235,15 @@ class PostService {
             }
             updateTags.add(tag._id.toString());
             (await this._redisService.getFCMs(tag._id))?.map((token) => fcmTokens.push(token))
-           
-            post.tags=[...updateTags].map((id:string)=>{
+
+            post.tags = [...updateTags].map((id: string) => {
                 return new Types.ObjectId(id)
             })
-        
+
         }
 
         if (req?.files?.length) {
-          let urls = await this._s3Service.uploadFiles({
+            let urls = await this._s3Service.uploadFiles({
                 files: req.files as Express.Multer.File[],
                 path: `users/${req?.user?._id}/posts/${post.folderId}`,
                 store_type: Store_Enum.memory
@@ -212,14 +260,32 @@ class PostService {
                 }
             })
         }
-        
-        if(content) post.content=content
-        if(availablity) post.availablity=availablity
-        if(allowComment) post.allowComment=allowComment
+
+        if (content) post.content = content
+        if (availablity) post.availablity = availablity
+        if (allowComment) post.allowComment = allowComment
 
         await post.save()
         successResponse({ res, data: post })
 
+    }
+
+    deletePost = async (req: Request, res: Response, next: NextFunction) => {
+        const { postId } = req.params
+        const post = await this._postRepo.findOneAndDelete({
+            filter: {
+                _id: postId,
+                createdBy: req?.user?._id!
+            }
+        })
+        if (!post) {
+            throw new appError("post not found or not allowed", 404)
+        }
+        if (post.attachments?.length) {
+            await this._s3Service.deleteFiles(post.attachments)
+            await this._s3Service.deleteFolder(`users/${req?.user?._id}/posts/${post.folderId}`)
+        }
+        successResponse({ res, message: "post deleted successfully" })
     }
 }
 
