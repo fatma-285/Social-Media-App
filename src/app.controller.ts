@@ -22,6 +22,10 @@ import {
   GraphQLSchema,
   GraphQLObjectType,
   GraphQLString,
+  GraphQLNonNull,
+  GraphQLBoolean,
+  GraphQLInt,
+  GraphQLList,
 } from 'graphql';
 
 const app: express.Application = express();
@@ -91,9 +95,21 @@ const bootstrap = async () => {
                         }
                 },
                 hi: {
-                    type:GraphQLString,
+                    type:new GraphQLNonNull(GraphQLString),
                     resolve:()=> {
-                        return "hello"
+                        return "hello2"
+                        }
+                },
+                getBoolean: {
+                    type:GraphQLBoolean,
+                    resolve:()=> {
+                        return true
+                        }
+                },
+                getInt: {
+                    type:GraphQLInt,
+                    resolve:()=> {
+                        return 4
                         }
                 }
             }
@@ -102,9 +118,68 @@ const bootstrap = async () => {
 
     app.use("/graphql",createHandler({schema}))
 
+const Users=[
+    {
+        id:1,
+        name:"fatma",
+        age:22
+    },
+    {
+        id:2,
+        name:"refaat",
+        age:33
+    },
+    {
+        id:3,
+        name:"ahmed",
+        age:44
+    }
+]
 
+const usersSchema=new GraphQLSchema({
+   query: new GraphQLObjectType({
+       name:"users",
+       description:"get users",
 
+       fields:{
+        user:{
+            type:new GraphQLObjectType({
+                name:"user",
+                fields:{
+                    id:{type:GraphQLInt},
+                    name:{type:GraphQLString},
+                    age:{type:GraphQLInt},
+                }
+            }),
+            args:{
+                id:{
+                    type:new GraphQLNonNull(GraphQLInt)
+                }
+            },
+            resolve:(parent,args)=>{
+                const user=Users.find(user=>user.id===args.id)
+                if(!user){
+                    throw new Error("user not found")
+                }
+                return user
+            }
+        },
+        listUsers:{
+            type:new GraphQLList(new GraphQLObjectType({
+                name:"allUsers",
+                fields:{
+                    id:{type:GraphQLInt},
+                    name:{type:GraphQLString},
+                    age:{type:GraphQLInt},
+                }
+            })),
+            resolve:()=>Users
+        }
+       }
+   })
+})
 
+app.use("/graphql2",createHandler({schema:usersSchema}))
 
 
     app.post("/send-notification", async(req: Request, res: Response, next: NextFunction) => {
