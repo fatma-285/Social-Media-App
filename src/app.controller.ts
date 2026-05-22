@@ -18,15 +18,19 @@ import postRouter from "./modules/posts/post.controller.js";
 import { createHandler } from "graphql-http/lib/use/express";
 
 import {
-  graphql,
-  GraphQLSchema,
-  GraphQLObjectType,
-  GraphQLString,
-  GraphQLNonNull,
-  GraphQLBoolean,
-  GraphQLInt,
-  GraphQLList,
+    graphql,
+    GraphQLSchema,
+    GraphQLObjectType,
+    GraphQLString,
+    GraphQLNonNull,
+    GraphQLBoolean,
+    GraphQLInt,
+    GraphQLList,
+    GraphQLEnumType,
 } from 'graphql';
+import { createTestAccount } from "nodemailer";
+import { createUnzip } from "node:zlib";
+import { graphql_schema } from "./modules/graphQl/graphql.schema.js";
 
 const app: express.Application = express();
 const port: number = Number(PORT)
@@ -83,127 +87,31 @@ const bootstrap = async () => {
     })
 
 
-    const schema=new GraphQLSchema({
-        query: new GraphQLObjectType({
-            name:"Query",
-            description:"query info",
-            fields:{
-                hello: {
-                    type:GraphQLString,
-                    resolve:()=> {
-                        return "hello"
-                        }
-                },
-                hi: {
-                    type:new GraphQLNonNull(GraphQLString),
-                    resolve:()=> {
-                        return "hello2"
-                        }
-                },
-                getBoolean: {
-                    type:GraphQLBoolean,
-                    resolve:()=> {
-                        return true
-                        }
-                },
-                getInt: {
-                    type:GraphQLInt,
-                    resolve:()=> {
-                        return 4
-                        }
-                }
-            }
-        })
-    })
+    app.use("/graphql", createHandler({ schema:graphql_schema,context:(req)=>({req})})); 
+   
 
-    app.use("/graphql",createHandler({schema}))
+    app.post("/send-notification", async (req: Request, res: Response, next: NextFunction) => {
+        try {
 
-const Users=[
-    {
-        id:1,
-        name:"fatma",
-        age:22
-    },
-    {
-        id:2,
-        name:"refaat",
-        age:33
-    },
-    {
-        id:3,
-        name:"ahmed",
-        age:44
-    }
-]
-
-const usersSchema=new GraphQLSchema({
-   query: new GraphQLObjectType({
-       name:"users",
-       description:"get users",
-
-       fields:{
-        user:{
-            type:new GraphQLObjectType({
-                name:"user",
-                fields:{
-                    id:{type:GraphQLInt},
-                    name:{type:GraphQLString},
-                    age:{type:GraphQLInt},
-                }
-            }),
-            args:{
-                id:{
-                    type:new GraphQLNonNull(GraphQLInt)
-                }
-            },
-            resolve:(parent,args)=>{
-                const user=Users.find(user=>user.id===args.id)
-                if(!user){
-                    throw new Error("user not found")
-                }
-                return user
-            }
-        },
-        listUsers:{
-            type:new GraphQLList(new GraphQLObjectType({
-                name:"allUsers",
-                fields:{
-                    id:{type:GraphQLInt},
-                    name:{type:GraphQLString},
-                    age:{type:GraphQLInt},
-                }
-            })),
-            resolve:()=>Users
-        }
-       }
-   })
-})
-
-app.use("/graphql2",createHandler({schema:usersSchema}))
-
-
-    app.post("/send-notification", async(req: Request, res: Response, next: NextFunction) => {
-       try{
-
-           await notificationService.sendNotification({
-               token:req.body.token,
-               data:{
-                   title:"hello",
-                   body:"world"
+            await notificationService.sendNotification({
+                token: req.body.token,
+                data: {
+                    title: "hello",
+                    body: "world"
                 }
             })
-            console.log({token:req.body.token});
-        }catch(error){
+            console.log({ token: req.body.token });
+        } catch (error) {
             console.log(error);
         }
     })
 
- app.get("/upload/pre-signed/*path", async (req: Request, res: Response, next: NextFunction) => {
+    app.get("/upload/pre-signed/*path", async (req: Request, res: Response, next: NextFunction) => {
         const { path } = req.params as { path: string[] };
         const { download } = req.query as { download: string };
         const Key = path.join("/") as string;
-        const url=await new S3Service().getPreSignedUrl({Key,download:download?download:undefined})
-        successResponse({res,data:url})
+        const url = await new S3Service().getPreSignedUrl({ Key, download: download ? download : undefined })
+        successResponse({ res, data: url })
     })
 
     app.get("/upload/*path", async (req: Request, res: Response, next: NextFunction) => {
@@ -222,10 +130,10 @@ app.use("/graphql2",createHandler({schema:usersSchema}))
     })
 
     app.get("/get-folder", async (req: Request, res: Response, next: NextFunction) => {
-        const {folderName}=req.query as {folderName:string}
-        const files=await new S3Service().getFiles(folderName)
-        const filesMapped=files.Contents?.map(file=>file.Key)
-        successResponse({res,data:filesMapped})
+        const { folderName } = req.query as { folderName: string }
+        const files = await new S3Service().getFiles(folderName)
+        const filesMapped = files.Contents?.map(file => file.Key)
+        successResponse({ res, data: filesMapped })
     })
 
     app.get("/delete-file", async (req: Request, res: Response, next: NextFunction) => {
@@ -239,7 +147,7 @@ app.use("/graphql2",createHandler({schema:usersSchema}))
         const result = await new S3Service().deleteFiles(Keys);
         successResponse({ res, data: result })
     })
-    
+
     app.get("/delete-folder", async (req: Request, res: Response, next: NextFunction) => {
         const { folderName } = req.body as { folderName: string };
         const result = await new S3Service().deleteFolder(folderName);

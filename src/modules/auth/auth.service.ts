@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { appError } from "../../common/utils/global-error-handler.js";
 import { type IChangePasswordType, type IConfirmEmailType, type IForgetPasswordType, type ILoginType, type IResendOtpType, type IResetPasswordType, type ISignUpType } from "./auth.dto.js";
 import { type IUser } from "../../DB/models/user.model.js";
-import type { HydratedDocument } from "mongoose";
+import type { HydratedDocument, Types } from "mongoose";
 import UserRepository from "../../DB/repositories/user.repository.js";
 import { encrypt } from "../../common/utils/security/encrypt.security.js";
 import { Compare, Hash } from "../../common/utils/security/hash.security.js";
@@ -20,6 +20,27 @@ import { emailEnum } from "../../common/enum/email.enum.js";
 import redisService from "../../common/service/redis.service.js";
 import { S3Service } from "../../common/service/s3.service.js";
 import notificationService from "../../common/service/notification.service.js";
+
+const Users = [
+    {
+        id: 1,
+        name: "fatma",
+        age: 22,
+        gender: "female"
+    },
+    {
+        id: 2,
+        name: "refaat",
+        age: 33,
+        gender: "male"
+    },
+    {
+        id: 3,
+        name: "ahmed",
+        age: 44,
+        gender: "male"
+    }
+]
 class AuthService {
 
     private readonly _userRepo = new UserRepository()
@@ -179,7 +200,7 @@ class AuthService {
     }
 
     login = async (req: Request, res: Response, next: NextFunction) => {
-        const { email, password,fcm }: ILoginType = req.body;
+        const { email, password, fcm }: ILoginType = req.body;
         if (!email || !password) {
             throw new appError("all fields are required..", 400)
         }
@@ -214,16 +235,17 @@ class AuthService {
                 jwtid
             }
         });
-       if(fcm){
-        await this._redisService.addFCM({userId:user._id,FCMToken:fcm})
-        const tokens= await  this._redisService.getFCMs(user._id)
-         await this._notificationService.sendNotifications({
-            tokens,
-            data:{
-                title:`Hi ${user.firstName} ${user.lastName??""}`,
-                body:`new lgin at ${new Date().toLocaleString()}`
-            }})
-    }   
+        if (fcm) {
+            await this._redisService.addFCM({ userId: user._id, FCMToken: fcm })
+            const tokens = await this._redisService.getFCMs(user._id)
+            await this._notificationService.sendNotifications({
+                tokens,
+                data: {
+                    title: `Hi ${user.firstName} ${user.lastName ?? ""}`,
+                    body: `new lgin at ${new Date().toLocaleString()}`
+                }
+            })
+        }
         successResponse({ res, status: 200, message: "user logged in successfully..👌", data: { access_token, refresh_token } })
     }
 
@@ -372,6 +394,29 @@ class AuthService {
             })
         }
         successResponse({ res })
+    }
+    // +============================GraphQl==============================
+
+    getUser = async(userId:Types.ObjectId) => {
+        const user = await this._userRepo.findOne({ filter: { _id: userId } })
+        if (!user) {
+            throw new Error("user not found")
+        }
+        return user
+    }
+
+    getUsers = async() => {
+        return await this._userRepo.find({filter:{}})
+    }
+
+    createUser=(args:any)=>{
+         const { id, name, age, gender } = args
+                    const userExist = Users.find(user => user.id === id)
+                    if (userExist) {
+                        throw new appError("user already exist", 400)
+                    }
+                    Users.push({ id, name, age, gender })
+                    return Users
     }
 }
 

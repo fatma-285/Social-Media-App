@@ -93,3 +93,10 @@ export const IChangePasswordSchema={
         confirmPassword: zod.string().min(8).max(20),
     })
 }
+
+
+//* //// get user gql ////
+
+export const getUserSchema =zod.strictObject({
+token:zod.string()
+})
