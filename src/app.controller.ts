@@ -31,6 +31,11 @@ import {
 import { createTestAccount } from "nodemailer";
 import { createUnzip } from "node:zlib";
 import { graphql_schema } from "./modules/graphQl/graphql.schema.js";
+import { Server } from "socket.io";
+import { decodedToken_and_fetchUser } from "./common/middleware/authentication.middleware.js";
+import redisService from "./common/service/redis.service.js";
+import socketGateway from "./modules/realtime/socket.gateway.js";
+import chatRouter from "./modules/chat/chat.controller.js";
 
 const app: express.Application = express();
 const port: number = Number(PORT)
@@ -87,8 +92,8 @@ const bootstrap = async () => {
     })
 
 
-    app.use("/graphql", createHandler({ schema:graphql_schema,context:(req)=>({req})})); 
-   
+    app.use("/graphql", createHandler({ schema: graphql_schema, context: (req) => ({ req }) }));
+
 
     app.post("/send-notification", async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -156,14 +161,19 @@ const bootstrap = async () => {
 
     app.use("/auth", authRouter)
     app.use("/post", postRouter)
+    app.use("/chat",chatRouter)
 
     app.use("{/*demo}", (req: Request, res: Response, next: NextFunction) => {
         throw new appError(`url ${req.originalUrl} with method ${req.method} not found`, 404)
     })
     app.use(globalErrorHandler)
-    app.listen(port, () => {
+
+    const http_server = app.listen(port, () => {
         console.log("Server is running on port 3000");
     });
+     
+    await socketGateway.InitIo(http_server)
+
 }
 
 export default bootstrap

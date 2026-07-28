@@ -246,7 +246,7 @@ class AuthService {
                 }
             })
         }
-        successResponse({ res, status: 200, message: "user logged in successfully..👌", data: { access_token, refresh_token } })
+        successResponse({ res, status: 200, message: "user logged in successfully", data: { access_token, refresh_token } })
     }
 
     forgetPassword = async (req: Request, res: Response, next: NextFunction) => {
@@ -329,7 +329,17 @@ class AuthService {
     }
 
     getProfile = async (req: Request, res: Response, next: NextFunction) => {
-        successResponse({ res, status: 200, message: "user fetched successfully..👌", data: req.user })
+        const user=await this._userRepo.findOne({
+            filter:{_id:req.user?._id as Types.ObjectId},
+            options:{
+                populate:[
+                    {
+                        path:"friends"
+                    }
+                ]
+            }
+        })
+        successResponse({ res, status: 200, message: "user fetched successfully..👌", data: {user} })
 
     }
 

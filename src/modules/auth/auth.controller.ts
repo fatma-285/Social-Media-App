@@ -5,8 +5,12 @@ import * as authValidation from "./auth.validation.js";
 import { authentication } from "../../common/middleware/authentication.middleware.js";
 import multer_cloud from "../../common/middleware/multer.cloud.js";
 import { Store_Enum } from "../../common/enum/multer.enum.js";
+import chatRouter from "../chat/chat.controller.js";
 
-const authRouter = Router();
+const authRouter = Router({mergeParams:true});
+
+authRouter.use("/:userId/chat",chatRouter);
+
 authRouter.post("/signUp",Validation(authValidation.signUpSchema),AuthService.signUp)
 authRouter.post("/signup/Gmail",AuthService.signUpWithGmail)
 authRouter.patch("/confirm-email",Validation(authValidation.IConfirmEmailSchema),AuthService.confirmEmail)

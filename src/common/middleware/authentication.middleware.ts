@@ -6,10 +6,8 @@ import UserRepository from "../../DB/repositories/user.repository.js";
 import redisService from "../service/redis.service.js";
 import tokenService from "../utils/security/token.service.js";
 import { appError } from "../utils/global-error-handler.js";
-
-export const authentication = async (req:Request, res:Response, next:NextFunction) => {
-    const { authorization } = req.headers;
-
+export const decodedToken_and_fetchUser=async(authorization:string)=>{
+    
     if (!authorization) {
         throw new appError("unauthorized..", 401)
     }
@@ -56,7 +54,12 @@ if(prefix===PREFIX_ADMIN){
     if (revokeToken) {
         throw new appError("invalid token revoked..", 401)
     }
-
+return {user,decoded}
+}
+export const authentication = async (req:Request, res:Response, next:NextFunction) => {
+    const { authorization } = req.headers;
+ 
+    const {user,decoded}=await decodedToken_and_fetchUser(authorization!)
     req.user = user;
     req.decoded = decoded;
     next();
