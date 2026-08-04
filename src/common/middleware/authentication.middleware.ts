@@ -6,31 +6,30 @@ import UserRepository from "../../DB/repositories/user.repository.js";
 import redisService from "../service/redis.service.js";
 import tokenService from "../utils/security/token.service.js";
 import { appError } from "../utils/global-error-handler.js";
-export const decodedToken_and_fetchUser=async(authorization:string)=>{
-    
-    if (!authorization) {
-        throw new appError("unauthorized..", 401)
-    }
+import  { tokenEnum } from "../enum/token.enum.js";
 
-    //bearer token
-    const [prefix, token] = authorization.split(" ");
-    if (!prefix ) {
-        throw new appError("invalid token prefix..", 401)
-    }
-    if ( !token) {
-        throw new appError("invalid token ..", 401)
-    }
-let ACCESS_SECRET_KEY="";
-if(prefix===PREFIX_ADMIN){
-    ACCESS_SECRET_KEY=SECRET_KEY_ADMIN!
-}else if (prefix===PREFIX_USER){
-    ACCESS_SECRET_KEY=SECRET_KEY_USER!
-}else{
-    throw new appError("invalid token prefix..", 401)
+
+export const getSignature=async(prefix:string)=>{
+     let ACCESS_SECRET_KEY = "";
+        let REFRESH_SECRET_KEY = "";
+
+        if (prefix === PREFIX_ADMIN) {
+            ACCESS_SECRET_KEY = process.env.SECRET_KEY_ADMIN!
+            REFRESH_SECRET_KEY = process.env.REFRESH_SECRET_KEY_ADMIN!
+        } else if (prefix === PREFIX_USER) {
+            ACCESS_SECRET_KEY = process.env.SECRET_KEY_USER!
+            REFRESH_SECRET_KEY = process.env.REFRESH_SECRET_KEY_USER!
+        } else {
+            throw new appError("invalid token prefix..")
+        }
+
+        return { ACCESS_SECRET_KEY, REFRESH_SECRET_KEY }
 }
-    const decoded =tokenService.verifyToken({
+
+export const DecodedToken_and_FetchUser=async(token:string,secret_key:string)=>{
+     const decoded =tokenService.verifyToken({
         token,
-        secret_key: ACCESS_SECRET_KEY!
+        secret_key
     })as any;
 
     if (!decoded || !decoded?.id) {
@@ -45,8 +44,7 @@ if(prefix===PREFIX_ADMIN){
     if (!user?.confirmed) {
         throw new appError("user not confirmed..", 400)
     }
-
-    // if (user.changeCredentials?.getTime() > decoded.iat * 1000) {
+// if (user.changeCredentials?.getTime() > decoded.iat * 1000) {
     //     throw new appError("token expired..", 401)})
     // }
 
@@ -54,16 +52,37 @@ if(prefix===PREFIX_ADMIN){
     if (revokeToken) {
         throw new appError("invalid token revoked..", 401)
     }
-return {user,decoded}
+
+    return {user,decoded}
 }
-export const authentication = async (req:Request, res:Response, next:NextFunction) => {
+
+
+export const authentication = (tokenType:tokenEnum=tokenEnum.access_token) => {
+return async (req:Request, res:Response, next:NextFunction) => {
     const { authorization } = req.headers;
  
-    const {user,decoded}=await decodedToken_and_fetchUser(authorization!)
+    if (!authorization) {
+        return next(new Error("token not found", { cause: 401 }));
+    }
+    const [prefix, token] = authorization.split(" ");
+  if (!prefix ) {
+        throw new appError("invalid token prefix..", 401)
+    }
+    if ( !token) {
+        throw new appError("invalid token ..", 401)
+    }
+
+    const {ACCESS_SECRET_KEY,REFRESH_SECRET_KEY}=await getSignature(prefix);
+    let secret_key = tokenType == tokenEnum.access_token ? ACCESS_SECRET_KEY : REFRESH_SECRET_KEY;
+ 
+    
+    const {user,decoded}=await DecodedToken_and_FetchUser(token,secret_key);
+
     req.user = user;
     req.decoded = decoded;
+
     next();
-}
+}}
 
 
 export const gql_authentication = async (authorization:string) => {
